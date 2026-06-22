@@ -408,6 +408,30 @@ function leadingIndentLen(s: string): number {
 }
 
 editor.addEventListener("keydown", (e) => {
+  // Enter: the new line inherits the current line's leading indentation.
+  if (
+    e.key === "Enter" &&
+    !e.shiftKey &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    !e.isComposing
+  ) {
+    const value = editor.value;
+    const selStart = editor.selectionStart;
+    const selEnd = editor.selectionEnd;
+    const lineStart = value.lastIndexOf("\n", selStart - 1) + 1;
+    const nl = value.indexOf("\n", lineStart);
+    const lineEnd = nl === -1 ? value.length : nl;
+    const indent = value.slice(lineStart, lineEnd).match(/^[\t ]*/)?.[0] ?? "";
+    e.preventDefault();
+    const insert = "\n" + indent;
+    editor.value = value.slice(0, selStart) + insert + value.slice(selEnd);
+    editor.selectionStart = editor.selectionEnd = selStart + insert.length;
+    schedulePreview();
+    return;
+  }
+
   if (e.key !== "Tab") return;
   e.preventDefault(); // stop Tab from moving focus out of the textarea
 
