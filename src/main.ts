@@ -395,6 +395,72 @@ editToggle.addEventListener("click", toggleEdit);
 editor.addEventListener("input", schedulePreview);
 saveBtn.addEventListener("click", () => void save());
 
+// ---------- Tab / Shift+Tab indentation (Notepad++ style) ----------
+const INDENT = "\t"; // indent unit; switch to "    " for 4-space indentation
+const TAB_SIZE = 4; // leading spaces that count as one indent level on outdent
+
+// Length of one indent level at a line start: one tab, or up to TAB_SIZE spaces.
+function leadingIndentLen(s: string): number {
+  if (s.startsWith("\t")) return 1;
+  let n = 0;
+  while (n < TAB_SIZE && s[n] === " ") n++;
+  return n;
+}
+
+editor.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab") return;
+  e.preventDefault(); // stop Tab from moving focus out of the textarea
+
+  const value = editor.value;
+  const selStart = editor.selectionStart;
+  const selEnd = editor.selectionEnd;
+  const multiLine = value.slice(selStart, selEnd).includes("\n");
+  const lineStart = value.lastIndexOf("\n", selStart - 1) + 1;
+
+  if (!multiLine) {
+    if (!e.shiftKey) {
+      // Tab: insert one indent (replacing any single-line selection).
+      const pos = selStart + INDENT.length;
+      editor.value = value.slice(0, selStart) + INDENT + value.slice(selEnd);
+      editor.selectionStart = editor.selectionEnd = pos;
+    } else {
+      // Shift+Tab: outdent the caret's line.
+      const r = leadingIndentLen(value.slice(lineStart, lineStart + TAB_SIZE + 1));
+      if (r > 0) {
+        editor.value = value.slice(0, lineStart) + value.slice(lineStart + r);
+        editor.selectionStart = editor.selectionEnd = Math.max(lineStart, selStart - r);
+      }
+    }
+  } else {
+    // Multi-line selection: indent / outdent every touched line.
+    const blockStart = lineStart;
+    let blockEnd = selEnd;
+    if (selEnd > selStart && value[selEnd - 1] === "\n") blockEnd = selEnd - 1;
+    const before = value.slice(0, blockStart);
+    const after = value.slice(blockEnd);
+    const lines = value.slice(blockStart, blockEnd).split("\n");
+
+    let firstDelta = 0; // first-line char change, to fix selectionStart
+    let totalDelta = 0; // total char change, to fix selectionEnd
+    const newLines = lines.map((line, i) => {
+      if (!e.shiftKey) {
+        if (i === 0) firstDelta = INDENT.length;
+        totalDelta += INDENT.length;
+        return INDENT + line;
+      }
+      const r = leadingIndentLen(line);
+      if (i === 0) firstDelta = -r;
+      totalDelta -= r;
+      return line.slice(r);
+    });
+    editor.value = before + newLines.join("\n") + after;
+    editor.selectionStart = Math.max(blockStart, selStart + firstDelta);
+    editor.selectionEnd = Math.max(editor.selectionStart, selEnd + totalDelta);
+  }
+
+  schedulePreview();
+});
+
 // ---------- Toast ----------
 let toastTimer: number | undefined;
 function toast(msg: string): void {
