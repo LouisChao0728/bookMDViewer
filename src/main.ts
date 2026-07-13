@@ -498,8 +498,8 @@ function toast(msg: string): void {
 
 // ---------- Export to standalone HTML (with TOC sidebar) ----------
 const EXPORT_CSS = `
-:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--border:#d1d9e0;--code-bg:#f6f8fa;--accent:#0969da;--stripe:#f6f8fa}
-@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--border:#30363d;--code-bg:#161b22;--accent:#4493f8;--stripe:#161b22}}
+:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--border:#d1d9e0;--code-bg:#f6f8fa;--inline-code-fg:#eb5757;--inline-code-bg:rgba(135,131,120,.15);--accent:#0969da;--stripe:#f6f8fa}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--border:#30363d;--code-bg:#161b22;--inline-code-fg:#ff7a7a;--inline-code-bg:rgba(135,131,120,.25);--accent:#4493f8;--stripe:#161b22}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;display:flex;align-items:flex-start}
 .toc{flex:0 0 264px;width:264px;position:sticky;top:0;max-height:100vh;overflow:auto;padding:24px 12px 40px;border-right:1px solid var(--border);font-size:13.5px;line-height:1.5}
@@ -510,9 +510,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,Bli
 .markdown-body h1,.markdown-body h2{border-bottom:1px solid var(--border);padding-bottom:.3em}
 .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{margin-top:1.4em;margin-bottom:.6em;font-weight:600;line-height:1.25}
 .markdown-body a{color:var(--accent);text-decoration:none}.markdown-body a:hover{text-decoration:underline}
-.markdown-body code{background:var(--code-bg);padding:.2em .4em;border-radius:6px;font-size:85%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.markdown-body code{color:var(--inline-code-fg);background:var(--inline-code-bg);padding:.2em .4em;border-radius:3px;font-size:85%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .markdown-body pre{background:var(--code-bg);padding:16px;border-radius:8px;overflow:auto;line-height:1.45}
-.markdown-body pre code{background:transparent;padding:0;font-size:90%}
+.markdown-body pre code{color:inherit;background:transparent;padding:0;font-size:90%}
 .markdown-body blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:4px solid var(--border)}
 .markdown-body table{border-collapse:collapse;display:block;width:max-content;max-width:100%;overflow:auto;margin:1em 0}
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:6px 13px}

@@ -4,6 +4,8 @@
   --muted: #59636e;
   --border: #d1d9e0;
   --code-bg: #f6f8fa;
+  --inline-code-fg: #eb5757;
+  --inline-code-bg: rgba(135, 131, 120, 0.15);
   --accent: #0969da;
   --table-stripe: #f6f8fa;
 }
@@ -15,6 +17,8 @@
     --muted: #9198a1;
     --border: #30363d;
     --code-bg: #161b22;
+    --inline-code-fg: #ff7a7a;
+    --inline-code-bg: rgba(135, 131, 120, 0.25);
     --accent: #4493f8;
     --table-stripe: #161b22;
   }
@@ -649,9 +653,10 @@ body {
 }
 
 .markdown-body code {
-  background: var(--code-bg);
+  color: var(--inline-code-fg);
+  background: var(--inline-code-bg);
   padding: 0.2em 0.4em;
-  border-radius: 6px;
+  border-radius: 3px;
   font-size: 85%;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
@@ -666,6 +671,7 @@ body {
 }
 
 .markdown-body pre code {
+  color: inherit;
   background: transparent;
   padding: 0;
   font-size: 90%;
