@@ -53,7 +53,7 @@ type, the two panes **scroll together**, and `Ctrl+S` saves back to disk.
 
 ## Download
 
-Grab the latest build from the [**Releases**](https://github.com/craig7351/bookMDViewer/releases/latest) page:
+Grab the latest build from the [**Releases**](https://github.com/LouisChao0728/bookMDViewer/releases/latest) page:
 
 | Platform | File |
 | --- | --- |

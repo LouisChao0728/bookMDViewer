@@ -662,7 +662,7 @@ fontDec.addEventListener("click", () => bumpFont(-0.1));
 applyFontScale();
 
 // ---------- About dialog (version info) ----------
-const REPO_URL = "https://github.com/craig7351/bookMDViewer";
+const REPO_URL = "https://github.com/LouisChao0728/bookMDViewer";
 const aboutModal = document.getElementById("about-modal") as HTMLElement;
 const aboutVersion = document.getElementById("about-version") as HTMLElement;
 aboutVersion.textContent = `v${__APP_VERSION__}`;

@@ -50,7 +50,7 @@ Mermaid 圖表、可即時預覽的編輯器,以及一鍵匯出成自包含的 H
 
 ## 下載
 
-到 [**Releases**](https://github.com/craig7351/bookMDViewer/releases/latest) 頁面取得最新版本:
+到 [**Releases**](https://github.com/LouisChao0728/bookMDViewer/releases/latest) 頁面取得最新版本:
 
 | 平台 | 檔案 |
 | --- | --- |
