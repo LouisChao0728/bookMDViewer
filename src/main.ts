@@ -778,24 +778,60 @@ function fileRow(
   return a;
 }
 
-// Right-click context menu for files.
+// Copy text to the system clipboard, falling back to execCommand for webviews
+// where the async Clipboard API is unavailable or blocked.
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    // fall through to the legacy path below
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+  } finally {
+    ta.remove();
+  }
+}
+
+// Right-click context menu for files and folders.
 let fileMenuEl: HTMLElement | null = null;
 function closeFileMenu(): void {
   fileMenuEl?.remove();
   fileMenuEl = null;
 }
-function showFileMenu(ev: MouseEvent, path: string): void {
+function showFileMenu(ev: MouseEvent, path: string, isDir: boolean): void {
   ev.preventDefault();
   closeFileMenu();
   const menu = document.createElement("div");
   menu.className = "ctx-menu";
-  const item = document.createElement("button");
-  item.textContent = "在新視窗開啟";
-  item.addEventListener("click", () => {
+
+  // "Open in new window" only makes sense for files (the app opens .md files).
+  if (!isDir) {
+    const openItem = document.createElement("button");
+    openItem.textContent = "在新視窗開啟";
+    openItem.addEventListener("click", () => {
+      closeFileMenu();
+      void invoke("open_new_window", { path });
+    });
+    menu.appendChild(openItem);
+  }
+
+  // "Copy path" — the full absolute filesystem path; available for both.
+  const copyItem = document.createElement("button");
+  copyItem.textContent = "複製路徑";
+  copyItem.addEventListener("click", () => {
     closeFileMenu();
-    void invoke("open_new_window", { path });
+    void copyToClipboard(path).then(() => toast("已複製路徑"));
   });
-  menu.appendChild(item);
+  menu.appendChild(copyItem);
+
   document.body.appendChild(menu);
   // Keep within the viewport.
   const mw = 180;
@@ -854,13 +890,15 @@ async function renderFiles(dir: string | null): Promise<void> {
   for (const entry of listing.entries) {
     if (entry.is_dir) {
       filesPanel.appendChild(
-        fileRow(entry.name, "📁", () => void renderFiles(entry.path)),
+        fileRow(entry.name, "📁", () => void renderFiles(entry.path), {
+          onContext: (ev) => showFileMenu(ev, entry.path, true),
+        }),
       );
     } else {
       filesPanel.appendChild(
         fileRow(entry.name, "📄", () => switchToFile(entry.path), {
           active: entry.path === currentPath,
-          onContext: (ev) => showFileMenu(ev, entry.path),
+          onContext: (ev) => showFileMenu(ev, entry.path, false),
         }),
       );
     }
