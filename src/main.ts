@@ -509,6 +509,11 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,Bli
 .markdown-body{flex:1;min-width:0;max-width:860px;margin:0 auto;padding:32px 40px 80px;word-wrap:break-word}
 .markdown-body h1,.markdown-body h2{border-bottom:1px solid var(--border);padding-bottom:.3em}
 .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{margin-top:1.4em;margin-bottom:.6em;font-weight:600;line-height:1.25}
+.markdown-body h1{font-size:2.25em;background-color:rgba(255,0,0,.12);padding:2px 6px}
+.markdown-body h2{font-size:1.875em;background-color:rgba(255,200,0,.12);padding:2px 6px}
+.markdown-body h3{font-size:1.375em;background-color:rgba(0,180,0,.06);padding:2px 6px}
+.markdown-body h4{font-size:1.25em}
+.markdown-body h5,.markdown-body h6{font-size:1.125em}
 .markdown-body a{color:var(--accent);text-decoration:none}.markdown-body a:hover{text-decoration:underline}
 .markdown-body code{color:var(--inline-code-fg);background:var(--inline-code-bg);padding:.2em .4em;border-radius:3px;font-size:85%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .markdown-body pre{background:var(--code-bg);padding:16px;border-radius:8px;overflow:auto;line-height:1.45}
@@ -518,7 +523,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,Bli
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:6px 13px}
 .markdown-body tr:nth-child(2n){background:var(--stripe)}
 .markdown-body img{max-width:100%}
-.markdown-body hr{border:none;border-top:1px solid var(--border);margin:1.6em 0}
+.markdown-body hr{border:none;border-top:1px solid #ffb6c1;margin:1.6em 0}
 .markdown-body .task-list-item{list-style:none}
 .markdown-body .task-list-item input{margin:0 .4em .25em -1.4em}
 .markdown-body pre.mermaid{background:transparent;text-align:center;padding:8px 0}

@@ -644,6 +644,41 @@ body {
   line-height: 1.25;
 }
 
+/* Heading sizes + tinted backgrounds and pink hr mirror the Obsidian
+   reading-mode snippet (custom-inline-code.css) this app is matched to. */
+.markdown-body h1 {
+  font-size: 2.25em;
+  background-color: rgba(255, 0, 0, 0.12);
+  padding: 2px 6px;
+}
+.markdown-body h2 {
+  font-size: 1.875em;
+  background-color: rgba(255, 200, 0, 0.12);
+  padding: 2px 6px;
+}
+.markdown-body h3 {
+  font-size: 1.375em;
+  background-color: rgba(0, 180, 0, 0.06);
+  padding: 2px 6px;
+}
+.markdown-body h4 {
+  font-size: 1.25em;
+}
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 1.125em;
+}
+
+/* The home / empty state is not a document; keep its headings untinted. */
+.empty-state h1,
+#recent-list h3 {
+  background: none;
+}
+.empty-state h1 {
+  font-size: 2em;
+  padding: 0;
+}
+
 .markdown-body a {
   color: var(--accent);
   text-decoration: none;
@@ -707,7 +742,7 @@ body {
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid #ffb6c1;
   margin: 1.6em 0;
 }
 
