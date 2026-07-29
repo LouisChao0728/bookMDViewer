@@ -158,6 +158,28 @@ function resolveImages(): void {
   });
 }
 
+// Obsidian-style copy button on hover for fenced code blocks (lucide "copy").
+const COPY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+
+function addCopyButtons(): void {
+  content.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
+    // Mermaid blocks render to SVG and already have the zoom lightbox.
+    if (pre.classList.contains("mermaid")) return;
+    const btn = document.createElement("button");
+    btn.className = "copy-code-button";
+    btn.type = "button";
+    btn.title = "複製程式碼";
+    btn.innerHTML = COPY_ICON_SVG;
+    btn.addEventListener("click", () => {
+      const code = pre.querySelector("code");
+      void copyToClipboard(code?.innerText ?? pre.innerText).then(() =>
+        toast("已複製程式碼"),
+      );
+    });
+    pre.appendChild(btn);
+  });
+}
+
 function formatFmValue(v: unknown): string {
   if (Array.isArray(v)) return v.map((x) => String(x)).join(", ");
   if (v instanceof Date) return v.toISOString();
@@ -264,6 +286,7 @@ async function renderMarkdown(
   });
   await renderFrontMatter();
   resolveImages();
+  addCopyButtons();
   buildToc();
 
   // Lazily pull in mermaid only when a diagram is actually present.
@@ -498,8 +521,8 @@ function toast(msg: string): void {
 
 // ---------- Export to standalone HTML (with TOC sidebar) ----------
 const EXPORT_CSS = `
-:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--border:#d1d9e0;--code-bg:#f6f8fa;--inline-code-fg:#eb5757;--inline-code-bg:rgba(135,131,120,.15);--accent:#0969da;--stripe:#f6f8fa}
-@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--border:#30363d;--code-bg:#161b22;--inline-code-fg:#ff7a7a;--inline-code-bg:rgba(135,131,120,.25);--accent:#4493f8;--stripe:#161b22}}
+:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--border:#d1d9e0;--code-bg:#f6f8fa;--pre-bg:#fafafa;--inline-code-fg:#eb5757;--inline-code-bg:rgba(135,131,120,.15);--accent:#0969da;--stripe:#f6f8fa}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--border:#30363d;--code-bg:#161b22;--pre-bg:#242424;--inline-code-fg:#ff7a7a;--inline-code-bg:rgba(135,131,120,.25);--accent:#4493f8;--stripe:#161b22}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;display:flex;align-items:flex-start}
 .toc{flex:0 0 264px;width:264px;position:sticky;top:0;max-height:100vh;overflow:auto;padding:24px 12px 40px;border-right:1px solid var(--border);font-size:13.5px;line-height:1.5}
@@ -516,8 +539,8 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,Bli
 .markdown-body h5,.markdown-body h6{font-size:1.125em}
 .markdown-body a{color:var(--accent);text-decoration:none}.markdown-body a:hover{text-decoration:underline}
 .markdown-body code{color:var(--inline-code-fg);background:var(--inline-code-bg);padding:.2em .4em;border-radius:3px;font-size:85%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-.markdown-body pre{background:var(--code-bg);padding:16px;border-radius:8px;overflow:auto;line-height:1.45}
-.markdown-body pre code{color:inherit;background:transparent;padding:0;font-size:90%}
+.markdown-body pre{position:relative;min-height:38px;background:var(--pre-bg);padding:12px 16px;border-radius:4px;white-space:pre-wrap;overflow:auto;line-height:1.45}
+.markdown-body pre code{color:inherit;background:transparent;padding:0;font-size:.875em;font-family:ui-monospace,SFMono-Regular,"Cascadia Mono","Roboto Mono","DejaVu Sans Mono","Liberation Mono",Menlo,Monaco,Consolas,"Source Code Pro",monospace}
 .markdown-body blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:4px solid var(--border)}
 .markdown-body table{border-collapse:collapse;display:block;width:max-content;max-width:100%;overflow:auto;margin:1em 0}
 .markdown-body th,.markdown-body td{border:1px solid var(--border);padding:6px 13px}
@@ -532,6 +555,10 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,Bli
 function buildExportHtml(): string {
   // Clone so we don't mutate the live DOM.
   const article = content.cloneNode(true) as HTMLElement;
+  // Copy buttons need the app's JS; drop them from the static export.
+  article
+    .querySelectorAll("button.copy-code-button")
+    .forEach((b) => b.remove());
   const headings = Array.from(
     article.querySelectorAll<HTMLElement>("h1, h2, h3"),
   );

@@ -8,6 +8,9 @@
   --inline-code-bg: rgba(135, 131, 120, 0.15);
   --accent: #0969da;
   --table-stripe: #f6f8fa;
+  /* Code-block tokens measured from Obsidian's default reading mode. */
+  --pre-bg: #fafafa;
+  --btn-hover: rgba(0, 0, 0, 0.067);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +24,8 @@
     --inline-code-bg: rgba(135, 131, 120, 0.25);
     --accent: #4493f8;
     --table-stripe: #161b22;
+    --pre-bg: #242424;
+    --btn-hover: rgba(255, 255, 255, 0.067);
   }
 }
 
@@ -697,10 +702,15 @@ body {
     "Liberation Mono", monospace;
 }
 
+/* Code blocks mirror Obsidian's default reading mode (values from app.css):
+   12px/16px padding, 4px radius, pre-wrap, 0.875em mono text. */
 .markdown-body pre {
-  background: var(--code-bg);
-  padding: 16px;
-  border-radius: 8px;
+  position: relative;
+  min-height: 38px;
+  background: var(--pre-bg);
+  padding: 12px 16px;
+  border-radius: 4px;
+  white-space: pre-wrap;
   overflow: auto;
   line-height: 1.45;
 }
@@ -709,7 +719,32 @@ body {
   color: inherit;
   background: transparent;
   padding: 0;
-  font-size: 90%;
+  font-size: 0.875em;
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", "Roboto Mono",
+    "DejaVu Sans Mono", "Liberation Mono", Menlo, Monaco, Consolas,
+    "Source Code Pro", monospace;
+}
+
+/* Copy button: hidden until the block is hovered, like Obsidian. */
+.markdown-body pre > button.copy-code-button {
+  display: none;
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  margin: 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.markdown-body pre:hover > button.copy-code-button {
+  display: block;
+}
+.markdown-body pre > button.copy-code-button:hover {
+  background: var(--btn-hover);
 }
 
 .markdown-body blockquote {
