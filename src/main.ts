@@ -7,7 +7,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 // hljs theme CSS as strings, so HTML export can be fully self-contained.
@@ -61,6 +61,10 @@ const toc = document.getElementById("toc") as HTMLElement;
 const layout = document.getElementById("layout") as HTMLElement;
 const tocToggle = document.getElementById("toc-toggle") as HTMLButtonElement;
 const editor = document.getElementById("editor") as HTMLTextAreaElement;
+const editorGutter = document.getElementById("editor-gutter") as HTMLElement;
+const gutterSizer = document.getElementById("gutter-sizer") as HTMLElement;
+const gutterInner = document.getElementById("gutter-inner") as HTMLElement;
+const editorMirror = document.getElementById("editor-mirror") as HTMLElement;
 const editToggle = document.getElementById("edit-toggle") as HTMLButtonElement;
 const saveBtn = document.getElementById("save-btn") as HTMLButtonElement;
 const exportBtn = document.getElementById("export-btn") as HTMLButtonElement;
@@ -317,6 +321,9 @@ async function renderMarkdown(
 
   // New documents start at the top; only hot-reload / live-edit keep position.
   content.scrollTop = preserveScroll ? scrollTop : 0;
+
+  // Re-rendering threw away the DOM the find ranges pointed at.
+  refreshFindHighlights();
 }
 
 function setTitle(): void {
@@ -356,7 +363,10 @@ async function openFile(
     currentText = text;
     dirty = false;
     addRecent(path);
-    if (editMode) editor.value = text;
+    if (editMode) {
+      editor.value = text;
+      renderGutter();
+    }
     setTitle();
     await renderMarkdown(text, preserveScroll);
     if (watch) {
@@ -369,12 +379,67 @@ async function openFile(
   }
 }
 
+// ---------- Editor line-number gutter (Notepad++ style) ----------
+// The textarea soft-wraps, so one logical line can occupy several visual rows.
+// The same text is laid out in a hidden mirror with identical metrics; each
+// line's offsetTop there is where its number belongs in the gutter.
+const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
+let gutterFrame = 0;
+
+function syncGutterScroll(): void {
+  gutterInner.style.transform = `translateY(${-editor.scrollTop}px)`;
+}
+
+function renderGutter(): void {
+  if (!editMode) return;
+  const lines = editor.value.split("\n");
+
+  // clientWidth excludes the textarea's scrollbar, so the mirror wraps identically.
+  editorMirror.style.width = `${editor.clientWidth}px`;
+  editorMirror.textContent = "";
+  const rows = document.createDocumentFragment();
+  for (const line of lines) {
+    const row = document.createElement("div");
+    // An empty div collapses to zero height; a zero-width space keeps the row.
+    row.textContent = line === "" ? ZERO_WIDTH_SPACE : line;
+    rows.appendChild(row);
+  }
+  editorMirror.appendChild(rows);
+
+  const tops = Array.from(editorMirror.children, (el) => (el as HTMLElement).offsetTop);
+
+  gutterSizer.textContent = String(lines.length);
+  gutterInner.textContent = "";
+  const numbers = document.createDocumentFragment();
+  tops.forEach((top, i) => {
+    const n = document.createElement("span");
+    n.style.top = `${top}px`;
+    n.textContent = String(i + 1);
+    numbers.appendChild(n);
+  });
+  gutterInner.appendChild(numbers);
+
+  syncGutterScroll();
+}
+
+function scheduleGutter(): void {
+  if (gutterFrame) return;
+  gutterFrame = requestAnimationFrame(() => {
+    gutterFrame = 0;
+    renderGutter();
+  });
+}
+
+// Re-wrap on width changes (window resize, panels toggling).
+new ResizeObserver(() => scheduleGutter()).observe(editorGutter.parentElement!);
+
 // ---------- Edit mode + live preview ----------
 
 let previewTimer: number | undefined;
 function schedulePreview(): void {
   dirty = editor.value !== currentText;
   setTitle();
+  scheduleGutter();
   window.clearTimeout(previewTimer);
   previewTimer = window.setTimeout(
     () => void renderMarkdown(editor.value, true),
@@ -388,6 +453,7 @@ function setEditMode(on: boolean): void {
   editToggle.textContent = on ? "👁 Preview" : "✎ Edit";
   if (on) {
     editor.value = currentText;
+    renderGutter();
     editor.focus();
   } else {
     // Leaving edit mode: render the latest source, keep position.
@@ -628,7 +694,10 @@ function syncScroll(from: HTMLElement, to: HTMLElement): void {
     syncing = false;
   });
 }
-editor.addEventListener("scroll", () => syncScroll(editor, content));
+editor.addEventListener("scroll", () => {
+  syncGutterScroll();
+  syncScroll(editor, content);
+});
 content.addEventListener("scroll", () => syncScroll(content, editor));
 
 // ---------- Close confirmation when there are unsaved changes ----------
@@ -684,6 +753,8 @@ function applyFontScale(): void {
   fontScale = Math.min(2.6, Math.max(0.6, Math.round(fontScale * 10) / 10));
   document.documentElement.style.setProperty("--content-scale", String(fontScale));
   localStorage.setItem("fontScale", String(fontScale));
+  // The gutter follows the editor's font size, so line offsets must be remeasured.
+  scheduleGutter();
 }
 function bumpFont(delta: number): void {
   fontScale += delta;
@@ -853,6 +924,18 @@ function showFileMenu(ev: MouseEvent, path: string, isDir: boolean): void {
       void invoke("open_new_window", { path });
     });
     menu.appendChild(openItem);
+
+    // "Show in folder" — opens the OS file manager with the file selected,
+    // the way Obsidian's "Show in system explorer" does.
+    const revealItem = document.createElement("button");
+    revealItem.textContent = "在資料夾中顯示";
+    revealItem.addEventListener("click", () => {
+      closeFileMenu();
+      void revealItemInDir(path).catch((e) =>
+        toast(`開啟資料夾失敗: ${String(e)}`),
+      );
+    });
+    menu.appendChild(revealItem);
   }
 
   // "Copy path" — the full absolute filesystem path; available for both.
@@ -1054,22 +1137,142 @@ function dgCenterZoom(factor: number): void {
 (document.getElementById("dg-close") as HTMLButtonElement).addEventListener("click", closeDiagram);
 
 // ---------- Find in document (Ctrl+F) ----------
-function openFind(): void {
-  findBar.hidden = false;
-  findInput.focus();
-  findInput.select();
+// Matches are painted with the CSS Custom Highlight API instead of window.find():
+// window.find() moves the document selection (and focus) into the article, which
+// kicked the caret out of the find box after the first typed character.
+interface HighlightLike {
+  add(range: Range): void;
 }
-function closeFind(): void {
-  findBar.hidden = true;
-  findCount.textContent = "";
-  window.getSelection()?.removeAllRanges();
+interface HighlightRegistry {
+  set(name: string, highlight: HighlightLike): void;
+  delete(name: string): void;
 }
-function runFind(backwards: boolean): void {
+const highlightRegistry = (CSS as unknown as { highlights?: HighlightRegistry })
+  .highlights;
+const HighlightCtor = (
+  window as unknown as { Highlight?: new () => HighlightLike }
+).Highlight;
+const canHighlight = Boolean(highlightRegistry && HighlightCtor);
+
+const FIND_MATCH_CAP = 2000; // stop painting absurd match counts on huge docs
+let findMatches: Range[] = [];
+let findIndex = -1;
+let findQuery = "";
+
+// Collect every match as a Range, spanning element boundaries (so `**bo**ld`
+// still matches "bold") by searching one concatenated string of all text nodes.
+function collectMatches(query: string): Range[] {
+  const out: Range[] = [];
+  if (!query) return out;
+
+  const nodes: Text[] = [];
+  const starts: number[] = [];
+  let raw = "";
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const text = node as Text;
+    if (!text.nodeValue) continue;
+    nodes.push(text);
+    starts.push(raw.length);
+    raw += text.nodeValue;
+  }
+  if (!nodes.length) return out;
+
+  // Case-insensitive matching, unless lowercasing would shift the offsets
+  // (a few characters expand, e.g. "İ"), in which case fall back to exact case.
+  const lowered = raw.toLowerCase();
+  const sameLength = lowered.length === raw.length;
+  const hay = sameLength ? lowered : raw;
+  const needle = sameLength ? query.toLowerCase() : query;
+
+  // Which text node holds the character at a global index.
+  const locate = (index: number): [Text, number] => {
+    let lo = 0;
+    let hi = nodes.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid] <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return [nodes[lo], index - starts[lo]];
+  };
+
+  let from = 0;
+  for (;;) {
+    const at = hay.indexOf(needle, from);
+    if (at === -1) break;
+    const [startNode, startOffset] = locate(at);
+    const [endNode, endOffset] = locate(at + needle.length - 1);
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset + 1);
+    out.push(range);
+    from = at + needle.length;
+    if (out.length >= FIND_MATCH_CAP) break;
+  }
+  return out;
+}
+
+function paintFind(): void {
+  if (!canHighlight) return;
+  const all = new HighlightCtor!();
+  const current = new HighlightCtor!();
+  findMatches.forEach((r, i) => (i === findIndex ? current : all).add(r));
+  highlightRegistry!.set("find-match", all);
+  highlightRegistry!.set("find-current", current);
+}
+
+function clearFindPaint(): void {
+  if (!canHighlight) return;
+  highlightRegistry!.delete("find-match");
+  highlightRegistry!.delete("find-current");
+}
+
+function updateFindCount(): void {
+  if (!findInput.value) {
+    findCount.textContent = "";
+  } else if (!findMatches.length) {
+    findCount.textContent = "無相符";
+  } else {
+    findCount.textContent = `${findIndex + 1}/${findMatches.length}`;
+  }
+}
+
+// Scroll the active match into view without touching focus.
+function revealMatch(): void {
+  const range = findMatches[findIndex];
+  if (!range) return;
+  const rect = range.getBoundingClientRect();
+  const view = content.getBoundingClientRect();
+  if (rect.top < view.top + 40 || rect.bottom > view.bottom - 40) {
+    content.scrollTop += rect.top - view.top - content.clientHeight / 3;
+  }
+}
+
+// Re-run the search against freshly rendered HTML, keeping the current position.
+function refreshFindHighlights(): void {
+  if (findBar.hidden || !canHighlight || !findInput.value) return;
+  const previous = findIndex;
+  findMatches = collectMatches(findInput.value);
+  findQuery = findInput.value;
+  findIndex = findMatches.length
+    ? Math.min(Math.max(previous, 0), findMatches.length - 1)
+    : -1;
+  paintFind();
+  updateFindCount();
+}
+
+// Fallback for webviews without the Highlight API: keep window.find(), but hand
+// focus straight back to the input so typing is not interrupted.
+function legacyFind(backwards: boolean): void {
   const q = findInput.value;
   if (!q) {
     findCount.textContent = "";
     return;
   }
+  const caretStart = findInput.selectionStart;
+  const caretEnd = findInput.selectionEnd;
   // window.find(text, caseSensitive, backwards, wrapAround)
   const found = (
     window as unknown as {
@@ -1077,6 +1280,48 @@ function runFind(backwards: boolean): void {
     }
   ).find(q, false, backwards, true);
   findCount.textContent = found ? "" : "無相符";
+  findInput.focus();
+  if (caretStart !== null && caretEnd !== null) {
+    findInput.setSelectionRange(caretStart, caretEnd);
+  }
+}
+
+function openFind(): void {
+  findBar.hidden = false;
+  findInput.focus();
+  findInput.select();
+  if (findInput.value) runFind(false);
+}
+
+function closeFind(): void {
+  findBar.hidden = true;
+  findCount.textContent = "";
+  clearFindPaint();
+  findMatches = [];
+  findIndex = -1;
+  findQuery = "";
+  window.getSelection()?.removeAllRanges();
+}
+
+function runFind(backwards: boolean): void {
+  if (!canHighlight) {
+    legacyFind(backwards);
+    return;
+  }
+  if (findInput.value !== findQuery) {
+    // New query: search from the top.
+    findQuery = findInput.value;
+    findMatches = collectMatches(findQuery);
+    findIndex = findMatches.length ? 0 : -1;
+  } else if (findMatches.length) {
+    // Same query: step to the next / previous match, wrapping around.
+    findIndex =
+      (findIndex + (backwards ? -1 : 1) + findMatches.length) %
+      findMatches.length;
+  }
+  paintFind();
+  updateFindCount();
+  revealMatch();
 }
 findInput.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {

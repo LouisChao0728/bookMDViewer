@@ -247,27 +247,93 @@ body {
 }
 
 /* ---------- Editor (live edit + preview) ---------- */
-#editor {
+#editor-pane {
   display: none;
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 100vh;
-  box-sizing: border-box;
-  padding: 32px 28px 80px;
-  border: none;
+  overflow: hidden;
   border-right: 1px solid var(--border);
-  resize: none;
-  outline: none;
-  background: var(--bg);
-  color: var(--fg);
+}
+#layout.mode-edit #editor-pane {
+  display: flex;
+}
+
+/* The textarea, the gutter and the measuring mirror must share every text
+   metric, otherwise line numbers drift as soon as a line soft-wraps. */
+#editor,
+#editor-gutter,
+#editor-mirror {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
   font-size: calc(14px * var(--content-scale, 1));
   line-height: 1.6;
   tab-size: 2;
 }
-#layout.mode-edit #editor {
-  display: block;
+
+#editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 32px 28px 80px;
+  border: none;
+  resize: none;
+  outline: none;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Notepad++-style line-number gutter. */
+#editor-gutter {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 34px;
+  height: 100%;
+  overflow: hidden;
+  padding: 0 8px 0 10px;
+  border-right: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* In-flow, invisible: only there so the gutter is exactly as wide as the
+   highest line number at the current font size. */
+#gutter-sizer {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  white-space: nowrap;
+}
+#gutter-inner {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  left: 10px;
+  will-change: transform;
+}
+#gutter-inner span {
+  position: absolute;
+  right: 0;
+  white-space: nowrap;
+}
+
+/* Off-screen copy of the source, laid out exactly like the textarea, used only
+   to read where each logical line starts after wrapping. */
+#editor-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  visibility: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: 32px 28px 80px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 /* In edit mode the preview fills its half (no centered max-width). */
 #layout.mode-edit .markdown-body {
@@ -382,6 +448,16 @@ body {
 #find-bar button:hover {
   background: var(--code-bg);
   color: var(--fg);
+}
+/* Match painting via the CSS Custom Highlight API: it does not touch the DOM
+   selection, so the find input keeps focus while typing. */
+::highlight(find-match) {
+  background: #ffe08a;
+  color: #1f2328;
+}
+::highlight(find-current) {
+  background: #ff9632;
+  color: #1f2328;
 }
 
 /* ---------- Recent files (empty state) ---------- */

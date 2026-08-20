@@ -30,11 +30,18 @@
     <div id="layout">
       <nav id="files" aria-label="File explorer"></nav>
       <nav id="toc" aria-label="Table of contents"></nav>
-      <textarea
-        id="editor"
-        spellcheck="false"
-        placeholder="Markdown source…"
-      ></textarea>
+      <div id="editor-pane">
+        <div id="editor-gutter" aria-hidden="true">
+          <div id="gutter-sizer"></div>
+          <div id="gutter-inner"></div>
+        </div>
+        <textarea
+          id="editor"
+          spellcheck="false"
+          placeholder="Markdown source…"
+        ></textarea>
+        <div id="editor-mirror" aria-hidden="true"></div>
+      </div>
       <article id="content" class="markdown-body">
         <div class="empty-state">
           <h1>Markdown Viewer</h1>
