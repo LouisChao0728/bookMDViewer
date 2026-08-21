@@ -587,7 +587,7 @@ function toast(msg: string): void {
 
 // ---------- Export to standalone HTML (with TOC sidebar) ----------
 const EXPORT_CSS = `
-:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--border:#d1d9e0;--code-bg:#f6f8fa;--pre-bg:#fafafa;--inline-code-fg:#eb5757;--inline-code-bg:rgba(135,131,120,.15);--accent:#0969da;--stripe:#f6f8fa}
+:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--border:#d1d9e0;--code-bg:#f6f8fa;--pre-bg:#eaeaea;--inline-code-fg:#eb5757;--inline-code-bg:rgba(135,131,120,.15);--accent:#0969da;--stripe:#f6f8fa}
 @media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--border:#30363d;--code-bg:#161b22;--pre-bg:#242424;--inline-code-fg:#ff7a7a;--inline-code-bg:rgba(135,131,120,.25);--accent:#4493f8;--stripe:#161b22}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;display:flex;align-items:flex-start}
