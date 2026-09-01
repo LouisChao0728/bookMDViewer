@@ -56,6 +56,34 @@ const md: MarkdownIt = new MarkdownIt({
 // that pollutes the outline.
 md.disable("lheading");
 
+// ---------- Source-line mapping ----------
+// markdown-it records [line_begin, line_end] on block tokens. Copying that onto
+// the rendered element gives the preview anchors that point back at exact source
+// lines, which is what lets the two panes line up: a heading costs one line in
+// the editor but a whole band of height in the preview, so any whole-document
+// ratio between them drifts further the longer the document gets.
+md.core.ruler.push("source_line", (state) => {
+  for (const token of state.tokens) {
+    // Closing tokens carry no map; opening and self-closing block tokens do.
+    // Nested blocks are anchored too - one anchor per top-level block leaves
+    // long lists, tables and blockquotes badly under-sampled.
+    if (token.map && token.nesting >= 0) {
+      token.attrSet("data-line", String(token.map[0]));
+    }
+  }
+});
+
+// The `highlight` callback above returns a finished <pre …> string, which
+// markdown-it emits verbatim - token attributes never reach it. Re-inject the
+// anchor into the opening tag so fenced code and mermaid stay mappable.
+const renderFence = md.renderer.rules.fence!;
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const html = renderFence(tokens, idx, options, env, self);
+  const line = tokens[idx].map?.[0];
+  if (line == null) return html;
+  return html.replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-line="${line}"`);
+};
+
 const content = document.getElementById("content") as HTMLElement;
 const toc = document.getElementById("toc") as HTMLElement;
 const layout = document.getElementById("layout") as HTMLElement;
@@ -286,8 +314,9 @@ async function renderMarkdown(
   // Sanitize rendered HTML to neutralise scripts / event handlers in untrusted docs.
   content.innerHTML = DOMPurify.sanitize(md.render(text), {
     ADD_TAGS: ["pre"],
-    ADD_ATTR: ["class"],
+    ADD_ATTR: ["class", "data-line"],
   });
+  anchors = [];
   await renderFrontMatter();
   resolveImages();
   addCopyButtons();
@@ -385,6 +414,10 @@ async function openFile(
 // line's offsetTop there is where its number belongs in the gutter.
 const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
 let gutterFrame = 0;
+// Pixel offset of every source line inside the textarea, measured on the mirror.
+// The gutter needs these to place line numbers; scroll sync reuses them as the
+// editor-side half of each anchor pair.
+let lineTops: number[] = [];
 
 function syncGutterScroll(): void {
   gutterInner.style.transform = `translateY(${-editor.scrollTop}px)`;
@@ -407,6 +440,7 @@ function renderGutter(): void {
   editorMirror.appendChild(rows);
 
   const tops = Array.from(editorMirror.children, (el) => (el as HTMLElement).offsetTop);
+  lineTops = tops;
 
   gutterSizer.textContent = String(lines.length);
   gutterInner.textContent = "";
@@ -625,6 +659,11 @@ function buildExportHtml(): string {
   article
     .querySelectorAll("button.copy-code-button")
     .forEach((b) => b.remove());
+  // Source-line anchors only mean anything next to the editor; a static export
+  // has nothing to line up with.
+  article
+    .querySelectorAll("[data-line]")
+    .forEach((el) => el.removeAttribute("data-line"));
   const headings = Array.from(
     article.querySelectorAll<HTMLElement>("h1, h2, h3"),
   );
@@ -683,17 +722,110 @@ async function exportHtml(): Promise<void> {
 exportBtn.addEventListener("click", () => void exportHtml());
 
 // ---------- Synced scrolling (editor <-> preview) ----------
-let syncing = false;
-function syncScroll(from: HTMLElement, to: HTMLElement): void {
-  if (syncing || !editMode) return;
-  syncing = true;
-  const max = from.scrollHeight - from.clientHeight;
-  const ratio = max > 0 ? from.scrollTop / max : 0;
-  to.scrollTop = ratio * (to.scrollHeight - to.clientHeight);
-  requestAnimationFrame(() => {
-    syncing = false;
-  });
+// Both panes are driven off shared anchor pairs: a source line's pixel offset in
+// the editor, and the offset of the preview element rendered from that same
+// line. Between two anchors the position is interpolated, so the panes agree at
+// every mapped block rather than only at the two ends of the document.
+type Anchor = { src: number; prv: number };
+let anchors: Anchor[] = [];
+let anchorSig = "";
+
+// Mermaid, images and font-size changes resize the preview after render, so the
+// measurements are keyed on a cheap signature instead of asking every producer
+// of a height change to remember to invalidate them.
+function anchorSignature(): string {
+  return [
+    lineTops.length,
+    editor.scrollHeight,
+    editor.clientHeight,
+    content.scrollHeight,
+    content.clientHeight,
+  ].join("|");
 }
+
+function buildAnchors(): void {
+  const pairs: Anchor[] = [];
+  const base = content.getBoundingClientRect().top - content.scrollTop;
+  content.querySelectorAll<HTMLElement>("[data-line]").forEach((el) => {
+    const line = Number(el.dataset.line);
+    const src = lineTops[line];
+    if (!Number.isFinite(line) || src === undefined) return;
+    // A block inside a collapsed <details> takes part in no layout, so its rect
+    // reads as zero and would yield an offset that changes with wherever the
+    // preview happened to be scrolled when the anchors were rebuilt.
+    if (el.getClientRects().length === 0) return;
+    const prv = el.getBoundingClientRect().top - base;
+    // A nested block usually starts on the same line as its parent, and a block
+    // that grew after render can overlap the one before it; the first
+    // forward-moving pair wins, because going backwards would invert the
+    // interpolation between this anchor and the last.
+    const last = pairs[pairs.length - 1];
+    if (last && (src <= last.src || prv <= last.prv)) return;
+    pairs.push({ src, prv });
+  });
+  // Sentinels pin the two unmapped edges. At the top that is the front-matter
+  // card, which sits above the first anchor with no source line of its own. At
+  // the bottom it is the maximum scroll position of each pane: anchors in the
+  // final screenful can never reach the top edge, and keeping them would let the
+  // tail run past the end, so they are dropped in favour of one ramp that lands
+  // both panes on their last pixel together.
+  const srcMax = Math.max(0, editor.scrollHeight - editor.clientHeight);
+  const prvMax = Math.max(0, content.scrollHeight - content.clientHeight);
+  anchors = pairs.filter((a) => a.src < srcMax && a.prv < prvMax);
+  anchors.unshift({ src: 0, prv: 0 });
+  anchors.push({ src: srcMax, prv: prvMax });
+  anchorSig = anchorSignature();
+}
+
+// Piecewise-linear lookup: project a y offset in one pane onto the other.
+function project(y: number, from: keyof Anchor, to: keyof Anchor): number {
+  if (anchors.length < 2 || anchorSig !== anchorSignature()) buildAnchors();
+  let lo = 0;
+  let hi = anchors.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (anchors[mid][from] <= y) lo = mid;
+    else hi = mid;
+  }
+  const a = anchors[lo];
+  const b = anchors[hi];
+  const span = b[from] - a[from];
+  return a[to] + (span > 0 ? ((y - a[from]) / span) * (b[to] - a[to]) : 0);
+}
+
+// Remember the value we wrote, so the scroll event it causes is not mistaken for
+// the user scrolling that pane. A single shared flag loses the race when both
+// panes settle in the same frame, which is what makes ratio sync feel sticky.
+const programmatic = new WeakMap<HTMLElement, number>();
+
+function applyScroll(to: HTMLElement, top: number): void {
+  const max = Math.max(0, to.scrollHeight - to.clientHeight);
+  const next = Math.min(Math.max(top, 0), max);
+  if (Math.abs(next - to.scrollTop) < 1) return;
+  programmatic.set(to, next);
+  to.scrollTop = next;
+}
+
+function syncScroll(from: HTMLElement, to: HTMLElement): void {
+  if (!editMode) return;
+  const echo = programmatic.get(from);
+  programmatic.delete(from);
+  if (echo !== undefined && Math.abs(from.scrollTop - echo) < 1) return;
+  // scrollHeight and clientHeight are whole pixels while scrollTop is not, so a
+  // pane parked at its bottom stops a fraction short of the end sentinel - and
+  // the tail segment is steep enough to turn that fraction into a visible gap.
+  const fromMax = Math.max(0, from.scrollHeight - from.clientHeight);
+  if (from.scrollTop >= fromMax - 1) {
+    applyScroll(to, Infinity);
+    return;
+  }
+  const fromKey: keyof Anchor = from === editor ? "src" : "prv";
+  const toKey: keyof Anchor = fromKey === "src" ? "prv" : "src";
+  // The top edge is the focal point, so whatever line sits at the top of the
+  // editor sits at the top of the preview.
+  applyScroll(to, project(from.scrollTop, fromKey, toKey));
+}
+
 editor.addEventListener("scroll", () => {
   syncGutterScroll();
   syncScroll(editor, content);
