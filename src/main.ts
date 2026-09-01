@@ -726,7 +726,7 @@ exportBtn.addEventListener("click", () => void exportHtml());
 // the editor, and the offset of the preview element rendered from that same
 // line. Between two anchors the position is interpolated, so the panes agree at
 // every mapped block rather than only at the two ends of the document.
-type Anchor = { src: number; prv: number };
+type Anchor = { src: number; prv: number; line: number | null; el: HTMLElement | null };
 let anchors: Anchor[] = [];
 let anchorSig = "";
 
@@ -761,25 +761,34 @@ function buildAnchors(): void {
     // interpolation between this anchor and the last.
     const last = pairs[pairs.length - 1];
     if (last && (src <= last.src || prv <= last.prv)) return;
-    pairs.push({ src, prv });
+    pairs.push({ src, prv, line, el });
   });
-  // Sentinels pin the two unmapped edges. At the top that is the front-matter
-  // card, which sits above the first anchor with no source line of its own. At
-  // the bottom it is the maximum scroll position of each pane: anchors in the
-  // final screenful can never reach the top edge, and keeping them would let the
-  // tail run past the end, so they are dropped in favour of one ramp that lands
-  // both panes on their last pixel together.
-  const srcMax = Math.max(0, editor.scrollHeight - editor.clientHeight);
-  const prvMax = Math.max(0, content.scrollHeight - content.clientHeight);
-  anchors = pairs.filter((a) => a.src < srcMax && a.prv < prvMax);
-  anchors.unshift({ src: 0, prv: 0 });
-  anchors.push({ src: srcMax, prv: prvMax });
+  // Sentinels pin the stretches with no anchors of their own. At the top that is
+  // the front-matter card, which has no source line. At the bottom there are
+  // two: where the text ends, and where the scrollable box ends. Both panes
+  // carry the same trailing blank (see #editor in styles.css), so the run
+  // between those two maps one pixel to one pixel and the panes stay together
+  // to the last line rather than drifting apart across the tail.
+  const tail = (el: HTMLElement) =>
+    el.scrollHeight - parseFloat(getComputedStyle(el).paddingBottom || "0");
+  pairs.unshift({ src: 0, prv: 0, line: null, el: null });
+  // Only strictly forward-moving sentinels; a document shorter than its own
+  // padding could otherwise put one behind the last real anchor.
+  for (const end of [
+    { src: tail(editor), prv: tail(content), line: null, el: null },
+    { src: editor.scrollHeight, prv: content.scrollHeight, line: null, el: null },
+  ]) {
+    const last = pairs[pairs.length - 1];
+    if (end.src > last.src && end.prv > last.prv) pairs.push(end);
+  }
+  anchors = pairs;
   anchorSig = anchorSignature();
 }
 
-// Piecewise-linear lookup: project a y offset in one pane onto the other.
-function project(y: number, from: keyof Anchor, to: keyof Anchor): number {
-  if (anchors.length < 2 || anchorSig !== anchorSignature()) buildAnchors();
+type Axis = "src" | "prv";
+
+// The two anchors bracketing y along the given axis.
+function bracket(y: number, from: Axis): [Anchor, Anchor] {
   let lo = 0;
   let hi = anchors.length - 1;
   while (hi - lo > 1) {
@@ -787,8 +796,37 @@ function project(y: number, from: keyof Anchor, to: keyof Anchor): number {
     if (anchors[mid][from] <= y) lo = mid;
     else hi = mid;
   }
-  const a = anchors[lo];
-  const b = anchors[hi];
+  return [anchors[lo], anchors[hi]];
+}
+
+// Has either pane moved under a measurement we already took? Re-wrapping the
+// editor or reflowing the preview can leave the total heights the signature
+// watches unchanged, so the two anchors about to be used are checked against
+// the live geometry rather than trusted. Only those two, not the whole table.
+function drifted(a: Anchor, b: Anchor): boolean {
+  let base: number | null = null;
+  for (const anchor of [a, b]) {
+    if (anchor.line === null || !anchor.el) continue;
+    // Editor side: a re-measured gutter changes where a source line sits.
+    if (lineTops[anchor.line] !== anchor.src) return true;
+    // Preview side: the block itself may have moved or been collapsed away.
+    if (anchor.el.getClientRects().length === 0) return true;
+    base ??= content.getBoundingClientRect().top - content.scrollTop;
+    if (Math.abs(anchor.el.getBoundingClientRect().top - base - anchor.prv) >= 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Piecewise-linear lookup: project a y offset in one pane onto the other.
+function project(y: number, from: Axis, to: Axis): number {
+  if (anchors.length < 2 || anchorSig !== anchorSignature()) buildAnchors();
+  let [a, b] = bracket(y, from);
+  if (drifted(a, b)) {
+    buildAnchors();
+    [a, b] = bracket(y, from);
+  }
   const span = b[from] - a[from];
   return a[to] + (span > 0 ? ((y - a[from]) / span) * (b[to] - a[to]) : 0);
 }
@@ -819,8 +857,8 @@ function syncScroll(from: HTMLElement, to: HTMLElement): void {
     applyScroll(to, Infinity);
     return;
   }
-  const fromKey: keyof Anchor = from === editor ? "src" : "prv";
-  const toKey: keyof Anchor = fromKey === "src" ? "prv" : "src";
+  const fromKey: Axis = from === editor ? "src" : "prv";
+  const toKey: Axis = fromKey === "src" ? "prv" : "src";
   // The top edge is the focal point, so whatever line sits at the top of the
   // editor sits at the top of the preview.
   applyScroll(to, project(from.scrollTop, fromKey, toKey));
